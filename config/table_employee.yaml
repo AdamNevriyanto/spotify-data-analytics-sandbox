@@ -1,0 +1,181 @@
+# ============================================================
+# config/table_employee.yaml — TABLE DEFINITION ONLY
+#
+# DESIGN PRINCIPLE:
+#   This file answers: "What does my table look like?"
+#     - Column names, types, cleansing rules
+#     - Primary keys, clustering columns
+#     - Source system table name
+#     - File format / parse options (csv, delimiter, etc.)
+#
+#   This file does NOT answer: "Where does the data live?"
+#     - catalog       → spark.conf.get("pipeline.catalog")
+#     - schema        → spark.conf.get("pipeline.schema")
+#     - S3 bucket     → spark.conf.get("pipeline.s3_bucket")
+#     - source_type   → spark.conf.get("pipeline.source_type")
+#     - JDBC host/port → spark.conf.get("pipeline.jdbc_host") etc.
+#
+#   All "where" values are set in databricks.yml → pipeline
+#   resource configuration → spark.conf. Changing environment
+#   (dev→prod) means changing the DAB target, NOT editing
+#   this file.
+# ============================================================
+
+tables:
+  employee:
+
+    bronze:
+      source_table: "cfzemp"         # actual source table/folder name
+      primary_keys:
+        - "CFCIF#"
+      cluster_by_col: "CFEDR6"       # Delta data skipping on date column
+
+      # ---------------------------------------------------------
+      # READ OPTIONS — how to PARSE the source file
+      # These describe the file format, not the infrastructure.
+      # They stay in this YAML because they're a property of
+      # the data itself (employee data = CSV, comma-delimited).
+      # ---------------------------------------------------------
+      read_options:
+        cloudFiles.format: "csv"
+        header: "true"
+        delimiter: ","
+        cloudFiles.inferColumnTypes: "true"
+        cloudFiles.schemaEvolutionMode: "addNewColumns"
+        cloudFiles.schemaHints: "`CFCIF#` STRING"
+
+      # ---------------------------------------------------------
+      # OPTION B — source_type in YAML (alternative)
+      #
+      # Use this when a table is PERMANENTLY tied to one source
+      # regardless of environment (e.g. vendor always sends CSV
+      # to S3, or table is always read from a specific DB).
+      #
+      # source_type: "s3"    # or "jdbc"
+      #
+      # Pipeline code would then do:
+      #   source_type = bronze_cfg.get(
+      #       "source_type",
+      #       spark.conf.get("pipeline.source_type", "s3")
+      #   )
+      # YAML value wins if present, otherwise falls back to
+      # the DAB variable. Best of both worlds.
+      # ---------------------------------------------------------
+
+    silver:
+      primary_keys:
+        - "CFCIF"                    # matches the RENAMED column below
+      partition_columns: "CFEDR6"
+      incremental_columns: [CFEDR6]  # used for SCD1 sequence ordering
+
+    columns:
+      - name: CFCIF                  # RENAMED: source "CFCIF#" → "CFCIF"
+        source: "CFCIF#"             # must match silver primary_key
+        type: string
+        cleansing:
+          trim: true
+      - name: CFENA1
+        source: CFENA1
+        type: string
+        cleansing:
+          trim: true
+      - name: CFESD7
+        source: CFESD7
+        type: integer
+        cleansing:
+          trim: true
+      - name: CFESD6
+        source: CFESD6
+        type: integer
+        cleansing:
+          trim: true
+      - name: CFEED7
+        source: CFEED7
+        type: integer
+        cleansing:
+          trim: true
+      - name: CFEED6
+        source: CFEED6
+        type: integer
+        cleansing:
+          trim: true
+      - name: CFENIN
+        source: CFENIN
+        type: string
+        cleansing:
+          trim: true
+      - name: CFESA1
+        source: CFESA1
+        type: string
+        cleansing:
+          trim: true
+      - name: CFESA2
+        source: CFESA2
+        type: string
+        cleansing:
+          trim: true
+      - name: CFECUR
+        source: CFECUR
+        type: integer
+        cleansing:
+          trim: true
+      - name: CFEPRV
+        source: CFEPRV
+        type: integer
+        cleansing:
+          trim: true
+      - name: CFERM1
+        source: CFERM1
+        type: string
+        cleansing:
+          trim: true
+      - name: CFERM2
+        source: CFERM2
+        type: string
+        cleansing:
+          trim: true
+      - name: CFERM3
+        source: CFERM3
+        type: string
+        cleansing:
+          trim: true
+      - name: CFERM4
+        source: CFERM4
+        type: string
+        cleansing:
+          trim: true
+      - name: CFEJCD
+        source: CFEJCD
+        type: string
+        cleansing:
+          trim: true
+      - name: CFOCCD
+        source: CFOCCD
+        type: string
+        cleansing:
+          trim: true
+      - name: CFEDI7
+        source: CFEDI7
+        type: integer
+        cleansing:
+          trim: true
+      - name: CFEDI6
+        source: CFEDI6
+        type: integer
+        cleansing:
+          trim: true
+      - name: CFEDR7
+        source: CFEDR7
+        type: integer
+        cleansing:
+          trim: true
+      - name: CFEDR6
+        source: CFEDR6
+        type: integer
+        cleansing:
+          trim: true
+      - name: CFCURR
+        source: CFCURR
+        type: string
+        cleansing:
+          trim: true

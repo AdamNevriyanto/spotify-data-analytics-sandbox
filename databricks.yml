@@ -1,0 +1,147 @@
+# ============================================================
+# databricks.yml — REFACTORED bundle config
+#
+# THIS FILE HAS THREE JOBS:
+#   1. Declare variables (the "what can change per environment")
+#   2. Define the pipeline resource + configuration bridge
+#   3. Define targets (personal / dev / prod)
+#
+# SAFE TO COMMIT — no secrets in this file.
+# ============================================================
+
+bundle:
+  name: dbx_pipeline_integration
+
+# Pipeline/job definitions live in separate files
+# Each pipeline gets its own file under resources/
+# Adding a new pipeline = create a new file, not edit this one
+include:
+  - resources/*.yml
+
+sync:
+  include:
+    - config/**
+    - utils/**
+    - pipelines/**
+
+
+# ============================================================
+# VARIABLES
+# These are the knobs you turn per environment.
+# Defaults = sandbox/dev values. Targets override for prod.
+# ============================================================
+variables:
+  catalog:
+    description: Unity Catalog catalog name
+    default: mii_workspace
+  schema_bronze:
+    description: Schema for bronze layer tables
+    default: default
+  schema_silver:
+    description: Schema for silver layer tables
+    default: default
+  source_type:
+    description: "Source type for ingestion: s3 or jdbc"
+    default: s3
+
+  # ---- S3 ----
+  s3_bucket:
+    description: S3 bucket base path for raw data
+    default: s3://sandbox-dbx/dbx-pipeline-integration/raw
+
+  # ---- JDBC ----
+  # Resource locators, NOT secrets. Safe to commit.
+  jdbc_host:
+    description: JDBC database hostname
+    default: dbx-sandbox-db.cl2c6ukwkfxn.ap-southeast-3.rds.amazonaws.com
+  jdbc_port:
+    description: JDBC database port
+    default: "5432"
+  jdbc_database:
+    description: JDBC database name
+    default: postgres
+  jdbc_driver:
+    description: JDBC driver class
+    default: org.postgresql.Driver
+  jdbc_ssl_mode:
+    description: JDBC SSL mode
+    default: require
+  jdbc_secret_scope:
+    description: Databricks Secret Scope name for JDBC credentials
+    default: jdbc-scope
+  jdbc_secret_key_user:
+    description: Secret key name for DB username
+    default: db-username
+  jdbc_secret_key_password:
+    description: Secret key name for DB password
+    default: db-password
+
+
+
+# ============================================================
+# TARGETS
+# Each target = one environment. Override only what differs.
+# If a variable isn't overridden, it uses the default above.
+# ============================================================
+targets:
+
+  # ---- PERSONAL (each developer's sandbox) ----
+  # Usage: databricks bundle deploy --target personal
+  # Creates: [dev <your-username>] pipeline_btn_development
+  # Uses all defaults (sandbox S3, sandbox DB)
+  personal:
+    mode: development
+    default: true
+    workspace:
+      host: https://dbc-fba03bad-86dd.cloud.databricks.com
+
+  # ---- DEV (shared test environment) ----
+  # Deployed by CI on merge to dev branch
+  # Uses defaults — same infra as personal, just runs as SP
+  dev:
+    mode: production
+    workspace:
+      host: https://dbc-fba03bad-86dd.cloud.databricks.com
+    run_as:
+      service_principal_name: 045f23e4-04e6-470e-a253-4aea5a2846c4
+
+  # ---- PRODUCTION ----
+  # Deployed by GitHub Actions on merge to main
+  # Overrides: different S3 bucket, different DB host,
+  # different secret scope for prod credentials
+  prod:
+    mode: production
+    workspace:
+      host: https://dbc-fba03bad-86dd.cloud.databricks.com
+    run_as:
+      service_principal_name: 045f23e4-04e6-470e-a253-4aea5a2846c4
+    variables:
+      s3_bucket: s3://production-datalake/raw
+      jdbc_host: prod-db.cl2c6ukwkfxn.ap-southeast-3.rds.amazonaws.com
+      jdbc_secret_scope: jdbc-scope-prod
+      # source_type: jdbc    # uncomment to switch prod to JDBC
+
+
+# ============================================================
+# WHERE DO SECRETS GO? (NOT in this file!)
+#
+# JDBC passwords / API keys:
+#   → Databricks Secret Scope
+#     databricks secrets create-scope --scope jdbc-scope
+#     databricks secrets put-secret --scope jdbc-scope --key db-password
+#     Read in code: dbutils.secrets.get(scope="jdbc-scope", key="db-password")
+#
+# Service Principal client secret (for CI/CD):
+#   → GitHub repo → Settings → Secrets → Actions
+#     Name: SP_CLIENT_SECRET
+#     Used by: .github/workflows/prod_deploy.yml
+#
+# Your personal Databricks auth:
+#   → ~/.databrickscfg (auto-created by `databricks configure`)
+#     Never committed to Git
+#
+# CLI OVERRIDE EXAMPLE:
+#   databricks bundle deploy --target personal \
+#     --var="s3_bucket=s3://my-test-bucket/raw" \
+#     --var="source_type=jdbc"
+# ============================================================

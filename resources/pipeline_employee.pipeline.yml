@@ -1,0 +1,57 @@
+# ============================================================
+# resources/pipeline_employee.pipeline.yml
+#
+# Employee-only pipeline (cfzemp) using the refactored pattern:
+#   - Table definition from YAML (config/table_employee.yaml)
+#   - Infrastructure from spark.conf (set by DAB variables)
+#
+# To add another pipeline, create a new file:
+#   resources/pipeline_customer.pipeline.yml
+#   resources/pipeline_address.pipeline.yml
+# Each file is auto-included via "include: - resources/*.yml"
+# in databricks.yml — no need to edit databricks.yml.
+# ============================================================
+
+resources:
+  pipelines:
+    pipeline_employee:
+      name: pipeline_employee
+      catalog: ${var.catalog}
+      schema: ${var.schema_bronze}
+      serverless: true
+      photon: true
+      channel: current
+      continuous: false
+      root_path: ../pipelines/bronze_silver
+
+      # Only the employee pipeline script
+      libraries:
+        - glob:
+            include: ../pipelines/bronze_silver/cfzemp_pipeline.py
+
+      environment:
+        dependencies:
+          - --editable ${workspace.file_path}
+
+      # ---- THE BRIDGE: DAB variables → spark.conf ----
+      configuration:
+        # Core
+        pipeline.catalog: ${var.catalog}
+        pipeline.schema_bronze: ${var.schema_bronze}
+        pipeline.schema_silver: ${var.schema_silver}
+        pipeline.source_type: ${var.source_type}
+        # S3
+        pipeline.s3_bucket: ${var.s3_bucket}
+        # JDBC
+        pipeline.jdbc_host: ${var.jdbc_host}
+        pipeline.jdbc_port: ${var.jdbc_port}
+        pipeline.jdbc_database: ${var.jdbc_database}
+        pipeline.jdbc_driver: ${var.jdbc_driver}
+        pipeline.jdbc_ssl_mode: ${var.jdbc_ssl_mode}
+        pipeline.jdbc_secret_scope: ${var.jdbc_secret_scope}
+        pipeline.jdbc_secret_key_user: ${var.jdbc_secret_key_user}
+        pipeline.jdbc_secret_key_password: ${var.jdbc_secret_key_password}
+
+      permissions:
+        - level: CAN_VIEW
+          group_name: users
