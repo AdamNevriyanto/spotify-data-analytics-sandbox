@@ -1,0 +1,84 @@
+tables:
+  artist:
+
+    bronze:
+      source_table: "artist"         # actual source table/folder name
+      primary_keys:
+        - "extract_date"
+        - "run_id"
+      cluster_by_col: "extract_date"       # Delta data skipping on date column
+
+      read_options:
+        cloudFiles.format: "csv"
+        header: "true"
+        delimiter: ","
+        cloudFiles.inferColumnTypes: "true"
+        cloudFiles.schemaEvolutionMode: "addNewColumns"
+        cloudFiles.schemaHints: "`CFCIF#` STRING"
+
+
+    silver:
+      primary_keys:
+        - "artist_id"                    # matches the RENAMED column below
+      partition_columns: "extract_date"
+      incremental_columns: [extract_date]  # used for SCD1 sequence ordering
+    ### MAPPING EXPLODE untuk source JSON
+      explode:
+        array_path: "payload.items"
+        position_column: "rank"
+        filter:
+          item_type: "artists"
+        carry_columns:
+          - extract_date
+          - time_range
+          - fetched_at
+          - ingested_timestamp
+          - source_file
+
+    columns:
+      - name: extract_date
+        source: extract_date
+        type: date
+      - name: time_range
+        source: time_range
+        type: string
+      - name: fetched_at
+        source: fetched_at
+        type: timestamp
+      - name: rank
+        source: rank
+        type: integer
+      
+      ## EXPLODE dari payload
+      - name: artist_id
+        source: artist_id
+        path: "id"
+        type: string
+        cleansing:
+          trim: true
+      - name: artist_name
+        source: artist_name
+        path: "name"
+        type: string
+        cleansing:
+          trim: true
+      # - name: popularity
+      #   source: popularity
+      #   path: "popularity"
+      #   type: integer
+      #   cleansing:
+      #     trim: true
+      # - name: followers
+      #   source: followers
+      #   path: "followers.total"
+      #   optional: true            
+      #   type: integer
+      #   cleansing:
+      #     trim: true
+      # - name: genres
+      #   source: genres
+      #   path: "genres"
+      #   array_join: ", "
+      #   type: string
+      #   cleansing:
+      #     trim: true

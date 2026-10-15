@@ -47,7 +47,7 @@ variables:
   # ---- S3 ----
   s3_bucket:
     description: S3 bucket base path for raw data
-    default: s3://sandbox-dbx/dbx-pipeline-integration/raw
+    default: s3://spotify-analytics-bucket/raw/
 
   # ---- JDBC ----
   # Resource locators, NOT secrets. Safe to commit.
@@ -93,7 +93,7 @@ targets:
     mode: development
     default: true
     workspace:
-      host: https://dbc-fba03bad-86dd.cloud.databricks.com
+      host: https://dbc-7bca3ce8-2b59.cloud.databricks.com
 
   # ---- DEV (shared test environment) ----
   # Deployed by CI on merge to dev branch
@@ -101,7 +101,7 @@ targets:
   dev:
     mode: production
     workspace:
-      host: https://dbc-fba03bad-86dd.cloud.databricks.com
+      host: https://dbc-7bca3ce8-2b59.cloud.databricks.com
     run_as:
       service_principal_name: 045f23e4-04e6-470e-a253-4aea5a2846c4
 
