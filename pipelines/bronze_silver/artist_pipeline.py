@@ -9,26 +9,25 @@ from utils.transform_json import explode_json
 source_type = spark.conf.get("pipeline.source_type", "s3")
 
 # ---- Table definition from YAML (columns, keys, cleansing, read format) ----
-TABLE_NAME = "artist"
+TABLE_NAME = "top_items"
 config = load_table_config(TABLE_NAME)
 table_cfg = config["tables"][TABLE_NAME]
 bronze_cfg = table_cfg["bronze"]
-silver_cfg = table_cfg["silver"]
-
+silver_conf = table_cfg["silver"]
+BRONZE_TABLE = f"bronze_{source_type}_{bronze_cfg['source_table']}"
 
 #####################################
 ##### ---- BRONZE LAYER ----- #######
 #####################################
 
 @dlt.table(
-    name=f"bronze_{source_type}_{bronze_cfg['source_table']}",
+    name=BRONZE_TABLE,
     cluster_by=[bronze_cfg["cluster_by_col"]] if bronze_cfg.get("cluster_by_col") else None,
     table_properties={
         "delta.dataSkippingStatsColumns": bronze_cfg.get("cluster_by_col")
     },
 )
-def bronze_employee():
-
+def _bronze():
     source_table = bronze_cfg["source_table"]  # "cfzemp" — from YAML
 
     if source_type == "s3":
@@ -73,25 +72,29 @@ def bronze_employee():
 #####################################
 ##### ---- SILVER LAYER ----- #######
 #####################################
-# Silver layer has no infrastructure dependencies —
-# it reads from the bronze table above, not from external sources.
-# No changes needed here from the original pattern.
 
-@dlt.view(name=f"silver_{TABLE_NAME}_staging")
+## NAMING TABLE SILVER SESUAI DENGAN MAPPING DI YAML
+def build_silver(name: str, silver_cfg: dict) -> None:
+    t_cfg = {"bronze": bronze_cfg, "silver": silver_cfg, "columns": silver_cfg["columns"]}
+
+    staging_view = f"silver_{name}_staging"
+    target_table = f"silver_{source_type}_{name}"
+
+# TEMP TABLE SILVER STAGING UNTUK HASIL EXPLODE DAN CLEANSING
+@dlt.view(name=staging_view)
 @dlt.expect_all_or_drop(
     {f"valid_{pk}": f"`{pk}` IS NOT NULL" for pk in silver_cfg["primary_keys"]}
 )
-def staged_employee():
-    """Apply column transforms and filter null PKs before merge."""
-    df_bronze = dlt.read_stream(f"bronze_{source_type}_{bronze_cfg['source_table']}")
-    # EXPLODE JSON COLUMNS DARI BRONZE TABLE (payload.item)
+def _staged():
+    # EXPLODE KOLOM JSON (payload.items) dan CLEANSING KOLOM
+    df_bronze = dlt.read_stream(BRONZE_TABLE)
     if silver_cfg.get("explode"):                                       
         df = explode_json(df, silver_cfg["explode"], table_cfg["columns"])
-    return transform(df_bronze, table_cfg)
+    return transform(df_bronze, t_cfg)
 
 
 dlt.create_streaming_table(
-    name=f"silver_{source_type}_{TABLE_NAME}",
+    name=target_table,
     cluster_by=[silver_cfg["partition_columns"]] if silver_cfg.get("partition_columns") else None,
     table_properties={
         "delta.dataSkippingStatsColumns": silver_cfg.get("partition_columns")
@@ -110,9 +113,12 @@ else:
     sequence_by = F.col("ingested_timestamp")
 
 dlt.apply_changes(
-    target=f"silver_{source_type}_{TABLE_NAME}",
-    source=f"silver_{TABLE_NAME}_staging",
+    target=target_table,
+    source=staging_view,
     keys=silver_cfg["primary_keys"],
     sequence_by=sequence_by,
     stored_as_scd_type=1,
 )
+
+for _name, _silver_cfg in silver_conf.items():
+    build_silver(_name, _silver_cfg)

@@ -47,7 +47,7 @@ variables:
   # ---- S3 ----
   s3_bucket:
     description: S3 bucket base path for raw data
-    default: s3://spotify-analytics-bucket/raw/
+    default: s3://spotify-analytics-bucket/raw/spotify
 
   # ---- JDBC ----
   # Resource locators, NOT secrets. Safe to commit.
