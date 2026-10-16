@@ -73,52 +73,52 @@ def _bronze():
 ##### ---- SILVER LAYER ----- #######
 #####################################
 
-## NAMING TABLE SILVER SESUAI DENGAN MAPPING DI YAML
+## BUILD SILVER TABLES FROM BRONZE (DENGAN NAMING SESUAI DI YAML)
 def build_silver(name: str, silver_cfg: dict) -> None:
     t_cfg = {"bronze": bronze_cfg, "silver": silver_cfg, "columns": silver_cfg["columns"]}
 
     staging_view = f"silver_{name}_staging"
     target_table = f"silver_{source_type}_{name}"
 
-# TEMP TABLE SILVER STAGING UNTUK HASIL EXPLODE DAN CLEANSING
-@dlt.view(name=staging_view)
-@dlt.expect_all_or_drop(
-    {f"valid_{pk}": f"`{pk}` IS NOT NULL" for pk in silver_cfg["primary_keys"]}
-)
-def _staged():
-    # EXPLODE KOLOM JSON (payload.items) dan CLEANSING KOLOM
-    df_bronze = dlt.read_stream(BRONZE_TABLE)
-    if silver_cfg.get("explode"):                                       
-        df = explode_json(df, silver_cfg["explode"], table_cfg["columns"])
-    return transform(df_bronze, t_cfg)
-
-
-dlt.create_streaming_table(
-    name=target_table,
-    cluster_by=[silver_cfg["partition_columns"]] if silver_cfg.get("partition_columns") else None,
-    table_properties={
-        "delta.dataSkippingStatsColumns": silver_cfg.get("partition_columns")
-    },
-)
-
-# Row ordering for SCD Type 1 merge:
-# If incremental_columns defined (e.g. CFEDR6), use it + ingested_timestamp.
-# Otherwise fall back to ingested_timestamp alone.
-if silver_cfg.get("incremental_columns"):
-    sequence_by = F.struct(
-        F.col(silver_cfg["incremental_columns"][0]),
-        F.col("ingested_timestamp"),
+    # TEMP TABLE SILVER STAGING UNTUK HASIL EXPLODE DAN CLEANSING
+    @dlt.view(name=staging_view)
+    @dlt.expect_all_or_drop(
+        {f"valid_{pk}": f"`{pk}` IS NOT NULL" for pk in silver_cfg["primary_keys"]}
     )
-else:
-    sequence_by = F.col("ingested_timestamp")
+    def _staged():
+        # EXPLODE KOLOM JSON (payload.items) dan CLEANSING KOLOM
+        df_bronze = dlt.read_stream(BRONZE_TABLE)
+        if silver_cfg.get("explode"):                                       
+            df = explode_json(df, silver_cfg["explode"], table_cfg["columns"])
+        return transform(df_bronze, t_cfg)
 
-dlt.apply_changes(
-    target=target_table,
-    source=staging_view,
-    keys=silver_cfg["primary_keys"],
-    sequence_by=sequence_by,
-    stored_as_scd_type=1,
-)
+
+    dlt.create_streaming_table(
+        name=target_table,
+        cluster_by=[silver_cfg["partition_columns"]] if silver_cfg.get("partition_columns") else None,
+        table_properties={
+            "delta.dataSkippingStatsColumns": silver_cfg.get("partition_columns")
+        },
+    )
+
+    # Row ordering for SCD Type 1 merge:
+    # If incremental_columns defined (e.g. CFEDR6), use it + ingested_timestamp.
+    # Otherwise fall back to ingested_timestamp alone.
+    if silver_cfg.get("incremental_columns"):
+        sequence_by = F.struct(
+            F.col(silver_cfg["incremental_columns"][0]),
+            F.col("ingested_timestamp"),
+        )
+    else:
+        sequence_by = F.col("ingested_timestamp")
+
+    dlt.apply_changes(
+        target=target_table,
+        source=staging_view,
+        keys=silver_cfg["primary_keys"],
+        sequence_by=sequence_by,
+        stored_as_scd_type=1,
+    )
 
 for _name, _silver_cfg in silver_conf.items():
     build_silver(_name, _silver_cfg)
