@@ -89,7 +89,7 @@ def build_silver(name: str, silver_cfg: dict) -> None:
         # EXPLODE KOLOM JSON (payload.items) dan CLEANSING KOLOM
         df_bronze = dlt.read_stream(BRONZE_TABLE)
         if silver_cfg.get("explode"):                                       
-            df = explode_json(df, silver_cfg["explode"], table_cfg["columns"])
+            df = explode_json(df_bronze, silver_cfg["explode"], table_cfg["columns"])
         return transform(df_bronze, t_cfg)
 
 
